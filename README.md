@@ -6,7 +6,7 @@ The **CTI Command Center** is an advanced **Cyber Threat Intelligence Dashboard*
 
 This project is designed to mimic a **Security Operations Center (SOC)** interface with a modern dark UI, providing insights into cyber threats and attack patterns.
 
----
+
 
 ## 🚀 Key Features
 
