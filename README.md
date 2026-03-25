@@ -41,7 +41,7 @@ This project is designed to mimic a **Security Operations Center (SOC)** interfa
 
 * Button to trigger test cyber attacks
 
----
+
 
 ## 🏗️ Technologies Used
 
@@ -52,7 +52,6 @@ This project is designed to mimic a **Security Operations Center (SOC)** interfa
   * Chart.js (Data Visualization)
   * Font Awesome (Icons)
 
----
 
 ## 📂 Project Structure
 
@@ -63,7 +62,7 @@ CTI_Project/
 ├── README.md       # Documentation
 ```
 
----
+
 
 ## ⚙️ How to Run the Project
 
@@ -87,7 +86,7 @@ cd CTI_Project
 Right-click → Open with Browser
 ```
 
----
+
 
 ### ✅ Method 2: Using Live Server (VS Code)
 
@@ -95,7 +94,7 @@ Right-click → Open with Browser
 2. Right-click `index.html`
 3. Click **"Open with Live Server"**
 
----
+
 
 ## 📊 How It Works
 
@@ -111,7 +110,7 @@ Right-click → Open with Browser
   * Sound notifications
   * UI updates
 
----
+
 
 ## 🔮 Future Enhancements
 
@@ -121,7 +120,7 @@ Right-click → Open with Browser
 * Database storage (MySQL / MongoDB)
 * AI-based threat prediction
 
----
+
 
 ## 📷 Screenshots
 ![alt text](<screenshots/Analytics Dashboard.png>)
@@ -137,14 +136,14 @@ Right-click → Open with Browser
 * Demonstration of threat intelligence concepts
 * UI/UX design for security systems
 
----
+
 
 ## 👩‍💻 Author
 
 **Kattula Susmija**
 GitHub: https://github.com/DAMERa2005
 
----
+
 
 ## 📄 License
 
