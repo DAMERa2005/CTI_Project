@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CTI Command Center | Dark SOC Dashboard</title>
+    <!-- Leaflet CSS for World Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Chart.js for Auto-updating Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Font Awesome 6 (free icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0a0c12;
+            font-family: 'Segoe UI', 'Inter', 'Courier New', monospace;
+            color: #e0e4f0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Dark SOC UI - glassmorphic, neon accents */
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 12px 20px 20px 20px;
+            gap: 18px;
+            background: radial-gradient(circle at 20% 30%, #0f1119, #080b10);
+        }
+
+        /* Header with threat level */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid #1e2a3a;
+            padding-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .title-section h1 {
+            font-size: 1.7rem;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #b0f0ff, #6a5acd);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+        .title-section p {
+            font-size: 0.75rem;
+            color: #7f8c9a;
+            font-family: monospace;
+        }
+        .risk-badge {
+            background: #0f1a1f;
+            padding: 8px 18px;
+            border-radius: 40px;
+            border-left: 4px solid #f97316;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(4px);
+        }
+        .risk-level {
+            color: #ff884d;
+            font-size: 1.2rem;
+        }
+        .sound-toggle {
+            background: #1e293b;
+            border: none;
+            color: #94a3b8;
+            padding: 6px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: 0.2s;
+        }
+        .sound-toggle.active {
+            background: #3b4b62;
+            color: #bbf0ff;
+        }
+
+        /* 2 column layout: left (map + alerts) , right (charts) */
+        .main-grid {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            min-height: 0;
+        }
+        .left-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 0;
+        }
+        .right-panel {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        /* Map container */
+        .map-card {
+            background: rgba(10, 20, 28, 0.65);
+            backdrop-filter: blur(8px);
+            border-radius: 24px;
+            border: 1px solid #2a3a44;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+            overflow: hidden;
+            height: 380px;
+        }
+        #worldmap {
+            height: 100%;
+            width: 100%;
+            background: #03060c;
+        }
+
+        /* Alerts feed */
+        .alerts-panel {
+            background: #0c0f17e6;
+            backdrop-filter: blur(4px);
+            border-radius: 24px;
+            border: 1px solid #2a3a44;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            height: 260px;
+        }
+        .alerts-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #293544;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+        .alert-list {
+            flex: 1;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .alert-item {
+            background: #11161f;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border-left: 4px solid;
+            display: flex;
+            justify-content: space-between;
+            font-family: monospace;
+            animation: fadeSlide 0.2s ease;
+        }
+        .alert-critical { border-left-color: #f43f5e; background: #1f1218; }
+        .alert-high { border-left-color: #f97316; }
+        .alert-medium { border-left-color: #eab308; }
+        .timestamp {
+            color: #6c86a3;
+            font-size: 0.7rem;
+        }
+
+        /* stats & chart cards */
+        .stat-cards {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: #0e121cb3;
+            backdrop-filter: blur(4px);
+            border-radius: 20px;
+            padding: 12px 16px;
+            flex: 1;
+            border: 1px solid #28343e;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #5bc0ff;
+        }
+        .chart-card {
+            background: #0c101ae0;
+            backdrop-filter: blur(4px);
+            border-radius: 24px;
+            padding: 16px;
+            border: 1px solid #2a3a44;
+            flex: 1;
+        }
+        canvas {
+            max-height: 220px;
+            width: 100%;
+        }
+        .btn-simulate {
+            background: linear-gradient(90deg, #1f2a3e, #121724);
+            border: 1px solid #4f6f8f;
+            color: #bbd9ff;
+            padding: 8px 12px;
+            border-radius: 36px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            margin-top: 6px;
+        }
+        .btn-simulate:hover {
+            background: #2a3a50;
+            box-shadow: 0 0 8px #3b82f680;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a202c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b6e8f;
+            border-radius: 10px;
+        }
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateX(-8px);}
+            to { opacity: 1; transform: translateX(0);}
+        }
+        .blink-red {
+            animation: pulseRed 0.6s ease-out;
+        }
+        @keyframes pulseRed {
+            0% { background: rgba(244,63,94,0); border-left-color: #f43f5e;}
+            50% { background: rgba(244,63,94,0.3);}
+            100% { background: rgba(244,63,94,0);}
+        }
+        footer {
+            font-size: 0.7rem;
+            text-align: right;
+            color: #2e4a62;
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <div class="header">
+        <div class="title-section">
+            <h1><i class="fas fa-shield-hog"></i> CYBER THREAT INTELLIGENCE</h1>
+            <p>LIVE THREAT MONITORING | ACTIVE ATTACK SURFACE</p>
+        </div>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="risk-badge">
+                <i class="fas fa-exclamation-triangle" style="color:#f97316"></i>
+                <span>GLOBAL RISK INDEX: </span>
+                <span class="risk-level" id="globalRiskLevel">HIGH</span>
+            </div>
+            <button id="soundToggleBtn" class="sound-toggle active"><i class="fas fa-volume-up"></i> Audio Alert ON</button>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <!-- LEFT SIDE: MAP + ALERTS -->
+        <div class="left-panel">
+            <div class="map-card">
+                <div id="worldmap"></div>
+            </div>
+            <div class="alerts-panel">
+                <div class="alerts-header">
+                    <span><i class="fas fa-bell"></i> HIGH-RISK ALERTS (Real-time)</span>
+                    <span><i class="fas fa-sync-alt"></i> live feed</span>
+                </div>
+                <div id="alertContainer" class="alert-list">
+                    <div class="alert-item alert-medium"><span><i class="fas fa-globe"></i> System ready · Monitoring 38+ threat vectors</span><span class="timestamp">just now</span></div>
+                </div>
+                <button id="manualAttackBtn" class="btn-simulate"><i class="fas fa-bolt"></i> SIMULATE CYBER ATTACK (Test Alert)</button>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE: STATS + CHARTS -->
+        <div class="right-panel">
+            <div class="stat-cards">
+                <div class="stat-card"><i class="fas fa-skull-crosswalk"></i><div class="stat-number" id="totalAttacksCount">0</div><div>Total Attacks</div></div>
+                <div class="stat-card"><i class="fas fa-chart-line"></i><div class="stat-number" id="activeThreatsCount">0</div><div>Active Threats</div></div>
+                <div class="stat-card"><i class="fas fa-radar"></i><div class="stat-number" id="criticalAlertsCount">0</div><div>Critical Alerts</div></div>
+            </div>
+            <div class="chart-card">
+                <div style="display: flex; justify-content: space-between;"><span><i class="fas fa-chart-pie"></i> Attack Type Analytics (last 60s)</span><span id="chartTimestamp" style="font-size:10px;">auto-updating</span></div>
+                <canvas id="attackTypeChart" width="400" height="200" style="max-height: 200px;"></canvas>
+            </div>
+            <div class="chart-card">
+                <div><i class="fas fa-waveform"></i> Threat Level Trend (per 15s)</div>
+                <canvas id="trendChart" width="400" height="150" style="max-height: 150px;"></canvas>
+            </div>
+            <footer>⚡ SOC Dashboard | Live attack simulation + geolocation mapping</footer>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- GLOBALS ----------
+    // Attack types for analytics
+    const ATTACK_TYPES = ["DDoS", "Ransomware", "Phishing", "Malware", "APT", "Zero-Day"];
+    // City/Coordinate pools for realistic world map attacks (lat,lng, city, country, type)
+    const LOCATIONS = [
+        { lat: 40.7128, lng: -74.0060, city: "New York", country: "USA", code: "US" },
+        { lat: 51.5074, lng: -0.1278, city: "London", country: "UK", code: "GB" },
+        { lat: 48.8566, lng: 2.3522, city: "Paris", country: "France", code: "FR" },
+        { lat: 55.7558, lng: 37.6173, city: "Moscow", country: "Russia", code: "RU" },
+        { lat: 35.6895, lng: 139.6917, city: "Tokyo", country: "Japan", code: "JP" },
+        { lat: 31.2304, lng: 121.4737, city: "Shanghai", country: "China", code: "CN" },
+        { lat: 28.6139, lng: 77.2090, city: "New Delhi", country: "India", code: "IN" },
+        { lat: -23.5505, lng: -46.6333, city: "Sao Paulo", country: "Brazil", code: "BR" },
+        { lat: -33.8688, lng: 151.2093, city: "Sydney", country: "Australia", code: "AU" },
+        { lat: 30.0444, lng: 31.2357, city: "Cairo", country: "Egypt", code: "EG" },
+        { lat: 52.5200, lng: 13.4050, city: "Berlin", country: "Germany", code: "DE" },
+        { lat: 45.4642, lng: 9.1900, city: "Milan", country: "Italy", code: "IT" },
+        { lat: 19.0760, lng: 72.8777, city: "Mumbai", country: "India", code: "IN" },
+        { lat: 1.3521, lng: 103.8198, city: "Singapore", country: "Singapore", code: "SG" },
+        { lat: 37.7749, lng: -122.4194, city: "San Francisco", country: "USA", code: "US" }
+    ];
+
+    // Data state
+    let attackHistory = [];       // each: { timestamp, type, lat, lng, city, severity, riskScore }
+    let alertsFeed = [];          // store recent high-risk alerts (critical/high)
+    let totalAttacks = 0;
+    let activeThreats = 0;        // simulated active threats = attacks in last 30 sec
+    let criticalCount = 0;
+    
+    // Chart instances
+    let attackChart, trendChart;
+    let attackTypeCounts = { "DDoS":0, "Ransomware":0, "Phishing":0, "Malware":0, "APT":0, "Zero-Day":0 };
+    let trendDataPoints = [];      // last 8 entries (15s interval)
+    let trendLabels = [];
+    
+    // Map
+    let map;
+    let attackMarkers = [];        // store markers for cleanup
+    let mapMarkersLimit = 30;
+    
+    // Sound & alert config
+    let audioEnabled = true;
+    let audioCtx = null;           // WebAudio for beep / alert sound
+    let soundToggleBtn = document.getElementById('soundToggleBtn');
+    
+    // Auto simulation interval
+    let autoInterval;
+    let trendInterval;
+    
+    // Helper: generate random attack with severity score 1-100 (critical >80, high >65)
+    function generateRandomAttack() {
+        const loc = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+        const attackType = ATTACK_TYPES[Math.floor(Math.random() * ATTACK_TYPES.length)];
+        const riskScore = Math.floor(Math.random() * 100) + 1;
+        let severity = "low";
+        if (riskScore >= 80) severity = "critical";
+        else if (riskScore >= 65) severity = "high";
+        else if (riskScore >= 40) severity = "medium";
+        else severity = "low";
+        
+        const attackObj = {
+            id: Date.now() + Math.random(),
+            timestamp: new Date(),
+            type: attackType,
+            lat: loc.lat,
+            lng: loc.lng,
+            city: loc.city,
+            country: loc.country,
+            riskScore: riskScore,
+            severity: severity,
+            code: loc.code
+        };
+        return attackObj;
+    }
+    
+    // Add attack to dashboard: update map, chart counts, alerts if high-risk
+    function addAttack(attack) {
+        totalAttacks++;
+        document.getElementById('totalAttacksCount').innerText = totalAttacks;
+        
+        // update attack type counts
+        attackTypeCounts[attack.type] = (attackTypeCounts[attack.type] || 0) + 1;
+        updateAttackChart();
+        
+        // Update active threats: simple sliding window based on timestamp (last 30 seconds)
+        updateActiveThreats();
+        
+        // Add to attack history for trend? We manage trend separately via periodic sampling
+        attackHistory.push(attack);
+        // limit history length
+        if (attackHistory.length > 200) attackHistory.shift();
+        
+        // Update map marker
+        addMapMarker(attack);
+        
+        // Check for high-risk alert (severity critical or high)
+        if (attack.severity === "critical" || attack.severity === "high") {
+            addAlertToFeed(attack);
+            if (attack.severity === "critical") {
+                criticalCount++;
+                document.getElementById('criticalAlertsCount').innerText = criticalCount;
+                // play critical sound if enabled
+                if (audioEnabled) playAlertSound(true);
+            } else {
+                if (audioEnabled) playAlertSound(false);
+            }
+        } else {
+            // optional low/medium sound less intrusive? not needed, only high-risk sound.
+        }
+        
+        // Update global risk index based on recent critical ratio
+        updateGlobalRiskLevel();
+    }
+    
+    // Add marker on leaflet map with pulsing effect
+    function addMapMarker(attack) {
+        const color = attack.severity === 'critical' ? '#f43f5e' : (attack.severity === 'high' ? '#f97316' : '#facc15');
+        const iconHtml = `<div style="background:${color}; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 8px ${color};"></div>`;
+        const customIcon = L.divIcon({ html: iconHtml, iconSize: [12,12], className: 'attack-marker' });
+        const marker = L.marker([attack.lat, attack.lng], { icon: customIcon }).addTo(map)
+            .bindPopup(`<b>${attack.type} attack</b><br>${attack.city}, ${attack.country}<br>Risk: ${attack.riskScore} (${attack.severity.toUpperCase()})`);
+        attackMarkers.push(marker);
+        // auto-remove old markers for performance
+        while(attackMarkers.length > mapMarkersLimit) {
+            const old = attackMarkers.shift();
+            map.removeLayer(old);
+        }
+        // optional fly effect: map pan slight? not needed to keep stable
+    }
+    
+    // Add alert to UI feed (high-risk)
+    function addAlertToFeed(attack) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alertDiv = document.createElement('div');
+        const severityClass = attack.severity === 'critical' ? 'alert-critical' : 'alert-high';
+        alertDiv.className = `alert-item ${severityClass}`;
+        const timeStr = attack.timestamp.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        alertDiv.innerHTML = `
+            <span><i class="fas fa-bolt"></i> <strong>${attack.type}</strong> · ${attack.city}, ${attack.country} · Risk ${attack.riskScore}</span>
+            <span class="timestamp">${timeStr}</span>
+        `;
+        alertContainer.prepend(alertDiv);
+        // limit feed to 15 alerts
+        while(alertContainer.children.length > 18) alertContainer.removeChild(alertContainer.lastChild);
+        // add blink effect to alert panel header
+        const alertPanel = document.querySelector('.alerts-panel');
+        alertPanel.classList.add('blink-red');
+        setTimeout(() => alertPanel.classList.remove('blink-red'), 400);
+    }
+    
+    // Update attack-type bar chart
+    function updateAttackChart() {
+        if (!attackChart) return;
+        const data = ATTACK_TYPES.map(t => attackTypeCounts[t] || 0);
+        attackChart.data.datasets[0].data = data;
+        attackChart.update();
+    }
+    
+    // Active threats: count attacks in last 30 seconds
+    function updateActiveThreats() {
+        const now = new Date();
+        const active = attackHistory.filter(a => (now - a.timestamp) <= 30000).length;
+        activeThreats = active;
+        document.getElementById('activeThreatsCount').innerText = activeThreats;
+    }
+    
+    // Trend chart update: sample every 15 seconds (attacks per interval? better: riskScore average + threat severity)
+    // We'll compute threat score (0-100) based on weighted severity of attacks in last 15s.
+    function computeCurrentThreatScore() {
+        const now = new Date();
+        const recentAttacks = attackHistory.filter(a => (now - a.timestamp) <= 30000);
+        if (recentAttacks.length === 0) return 12;
+        let totalRisk = 0;
+        recentAttacks.forEach(a => { totalRisk += a.riskScore; });
+        let avgRisk = totalRisk / recentAttacks.length;
+        // also factor volume
+        let volumeFactor = Math.min(recentAttacks.length / 5, 30);
+        let threatScore = avgRisk * 0.7 + volumeFactor;
+        return Math.min(100, Math.floor(threatScore));
+    }
+    
+    function updateTrendChartPeriodically() {
+        let score = computeCurrentThreatScore();
+        trendDataPoints.push(score);
+        if (trendDataPoints.length > 12) trendDataPoints.shift();
+        // update labels: time marks
+        while(trendLabels.length < trendDataPoints.length) trendLabels.push('');
+        if (trendChart) {
+            trendChart.data.datasets[0].data = [...trendDataPoints];
+            trendChart.update();
+        }
+        // also update global risk display text
+        updateGlobalRiskLevel();
+    }
+    
+    function updateGlobalRiskLevel() {
+        const score = computeCurrentThreatScore();
+        let levelText = "LOW";
+        if (score >= 70) levelText = "CRITICAL";
+        else if (score >= 55) levelText = "HIGH";
+        else if (score >= 30) levelText = "ELEVATED";
+        else levelText = "GUARDED";
+        document.getElementById('globalRiskLevel').innerText = levelText;
+        const riskBadge = document.querySelector('.risk-level');
+        if(score>=55) riskBadge.style.color = "#ff884d"; else riskBadge.style.color = "#6ee7b7";
+    }
+    
+    // ---- Sound Generation using Web Audio (beep + alert siren) ----
+    function playAlertSound(isCritical) {
+        if (!audioEnabled) return;
+        try {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            if (isCritical) {
+                // siren-like: two tone beep
+                osc.frequency.value = 880;
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+                osc.start();
+                osc.stop(now + 0.7);
+                // second beep higher
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.frequency.value = 1200;
+                gain2.gain.setValueAtTime(0.25, now+0.2);
+                gain2.gain.exponentialRampToValueAtTime(0.0001, now+0.9);
+                osc2.start(now+0.2);
+                osc2.stop(now+0.9);
+            } else {
+                osc.frequency.value = 650;
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+                osc.start();
+                osc.stop(now + 0.45);
+            }
+        } catch(e) { console.warn("audio error", e); }
+    }
+    
+    // Simulated real-time attack generator (auto)
+    function startAutoAttackSimulation() {
+        if(autoInterval) clearInterval(autoInterval);
+        autoInterval = setInterval(() => {
+            // generate 1-3 attacks per interval for dynamic feel
+            const attacksCount = Math.random() > 0.6 ? 2 : 1;
+            for(let i=0; i<attacksCount; i++) {
+                const newAttack = generateRandomAttack();
+                addAttack(newAttack);
+            }
+            updateActiveThreats();
+            document.getElementById('criticalAlertsCount').innerText = criticalCount;
+        }, 4000);
+    }
+    
+    // Manual attack simulation button (high risk mostly)
+    function triggerManualHighRisk() {
+        let attack = generateRandomAttack();
+        // force risk to be high or critical
+        attack.riskScore = Math.floor(Math.random() * 40) + 65;
+        attack.severity = attack.riskScore >= 80 ? "critical" : "high";
+        if (attack.severity === "critical") attack.type = "Ransomware";
+        else attack.type = "DDoS";
+        addAttack(attack);
+    }
+    
+    // Initialize Leaflet map with dark tiles
+    function initMap() {
+        map = L.map('worldmap').setView([20, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> & CartoDB',
+            subdomains: 'abcd',
+            minZoom: 1,
+            maxZoom: 6
+        }).addTo(map);
+    }
+    
+    // Charts initialization
+    function initCharts() {
+        const ctx1 = document.getElementById('attackTypeChart').getContext('2d');
+        attackChart = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: ATTACK_TYPES,
+                datasets: [{ label: 'Attack Count', data: [0,0,0,0,0,0], backgroundColor: '#3b82f6aa', borderRadius: 8 }]
+            },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#ccddee' } } } }
+        });
+        const ctx2 = document.getElementById('trendChart').getContext('2d');
+        trendChart = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: ['-','-','-','-','-','-','-','-'],
+                datasets: [{ label: 'Threat Index', data: [12,12,12,12,12,12,12,12], borderColor: '#f97316', tension: 0.2, fill: false, pointBackgroundColor: '#ff884d' }]
+            },
+            options: { responsive: true, maintainAspectRatio: true, scales: { y: { min: 0, max: 100, grid: { color: '#2a3a44' } } } }
+        });
+        for(let i=0;i<8;i++) trendDataPoints.push(12);
+        trendChart.data.datasets[0].data = trendDataPoints;
+        trendChart.update();
+    }
+    
+    // periodic trend update (every 12 seconds)
+    function startTrendUpdater() {
+        if(trendInterval) clearInterval(trendInterval);
+        trendInterval = setInterval(() => {
+            updateTrendChartPeriodically();
+        }, 12000);
+    }
+    
+    // Sound toggle
+    function setupSoundToggle() {
+        soundToggleBtn.addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            if(audioEnabled) {
+                soundToggleBtn.innerHTML = '<i class="fas fa-volume-up"></i> Audio Alert ON';
+                soundToggleBtn.classList.add('active');
+                // test beep to confirm
+                if(audioCtx) playAlertSound(false);
+            } else {
+                soundToggleBtn.innerHTML = '<i class="fas fa-volume-mute"></i> Audio Alert OFF';
+                soundToggleBtn.classList.remove('active');
+            }
+        });
+        // initial audio context unlock on user gesture
+        document.body.addEventListener('click', () => {
+            if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }, { once: true });
+    }
+    
+    // clean up markers periodically
+    setInterval(() => {
+        updateActiveThreats();
+        document.getElementById('criticalAlertsCount').innerText = criticalCount;
+    }, 5000);
+    
+    // Additional: simulate initial attacks to populate map
+    function seedInitialAttacks() {
+        for(let i=0;i<8;i++) {
+            let initAtk = generateRandomAttack();
+            initAtk.riskScore = Math.floor(Math.random() * 70) + 10;
+            if(initAtk.riskScore>70) initAtk.severity = "high";
+            else if(initAtk.riskScore>85) initAtk.severity = "critical";
+            else initAtk.severity = "medium";
+            addAttack(initAtk);
+        }
+    }
+    
+    // bootstrap
+    window.onload = () => {
+        initMap();
+        initCharts();
+        setupSoundToggle();
+        startAutoAttackSimulation();
+        startTrendUpdater();
+        seedInitialAttacks();
+        document.getElementById('manualAttackBtn').addEventListener('click', () => triggerManualHighRisk());
+        // periodic chart update for active threats on right side card is auto through addAttack.
+        setInterval(() => {
+            if(attackChart) attackChart.update();
+        }, 3000);
+    };
+</script>
+</body>
+</html>
